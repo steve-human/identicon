@@ -1,5 +1,9 @@
 defmodule Identicon do
-  def main(input) do
+  alias Image, as: Img
+
+  def main do
+    input = IO.gets("Enter input string: ") |> String.trim()
+
     input
     |> hash_input
     |> pick_color
@@ -8,22 +12,25 @@ defmodule Identicon do
     |> build_pixel_map
     |> draw_image
     |> save_image(input)
+
+    IO.puts("Identicon saved as #{input}.png")
   end
 
   def save_image(image, input) do
-    File.write("#{input}.png", image)
+    Image.write!(image, "#{input}.png")
   end
 
   def draw_image(%Identicon.Image{color: color, pixel_map: pixel_map}) do
-    image = :egd.create(250, 250)
-    fill = :egd.color(color)
+    {:ok, image} = Image.new(250, 250, color: [255, 255, 255])
 
-    Enum.each(pixel_map, fn {start, stop} ->
-      IO.puts("Drawing rectangle from #{inspect(start)} to #{inspect(stop)}")
-      :egd.filledRectangle(image, start, stop, fill)
-    end)
+    {:ok, image} =
+      Enum.reduce(pixel_map, {:ok, image}, fn {{x1, y1}, {x2, y2}}, {:ok, img} ->
+        Img.mutate(img, fn mut_img ->
+          Img.Draw.rect(mut_img, x1, y1, x2 - x1 + 1, y2 - y1 + 1, color: color)
+        end)
+      end)
 
-    :egd.render(image)
+    image
   end
 
   def build_pixel_map(%Identicon.Image{grid: grid} = image) do
@@ -74,6 +81,6 @@ defmodule Identicon do
   end
 
   def pick_color(%Identicon.Image{hex: [r, g, b | _]} = image) do
-    %Identicon.Image{image | color: {r, g, b}}
+    %Identicon.Image{image | color: [r, g, b]}
   end
 end
