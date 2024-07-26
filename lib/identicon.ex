@@ -16,21 +16,34 @@ defmodule Identicon do
     IO.puts("Identicon saved as #{input}.png")
   end
 
-  def save_image(image, input) do
-    Image.write!(image, "#{input}.png")
+  def hash_input(input) do
+    hex =
+      :crypto.hash(:md5, input)
+      |> :binary.bin_to_list()
+
+    %Identicon.Image{hex: hex}
   end
 
-  def draw_image(%Identicon.Image{color: color, pixel_map: pixel_map}) do
-    {:ok, image} = Image.new(250, 250, color: [255, 255, 255])
+  def pick_color(%Identicon.Image{hex: [r, g, b | _]} = image) do
+    %{image | color: [r, g, b]}
+  end
 
-    {:ok, image} =
-      Enum.reduce(pixel_map, {:ok, image}, fn {{x1, y1}, {x2, y2}}, {:ok, img} ->
-        Img.mutate(img, fn mut_img ->
-          Img.Draw.rect(mut_img, x1, y1, x2 - x1 + 1, y2 - y1 + 1, color: color)
-        end)
-      end)
+  def build_grid(%Identicon.Image{hex: hex} = image) do
+    grid =
+      hex
+      |> Enum.chunk_every(3, 3, :discard)
+      |> Enum.flat_map(&mirror_row/1)
+      |> Enum.with_index()
 
-    image
+    %{image | grid: grid}
+  end
+
+  def filter_odd_squares(%Identicon.Image{grid: grid} = image) do
+    filtered_grid =
+      grid
+      |> Enum.filter(fn {code, _index} -> rem(code, 2) == 0 end)
+
+    %{image | grid: filtered_grid}
   end
 
   def build_pixel_map(%Identicon.Image{grid: grid} = image) do
@@ -46,41 +59,28 @@ defmodule Identicon do
         {top_left, bottom_right}
       end)
 
-    %Identicon.Image{image | pixel_map: pixel_map}
+    %{image | pixel_map: pixel_map}
   end
 
-  def filter_odd_squares(%Identicon.Image{grid: grid} = image) do
-    filtered_grid =
-      grid
-      |> Enum.filter(fn {code, _index} -> rem(code, 2) == 0 end)
+  def draw_image(%Identicon.Image{color: color, pixel_map: pixel_map}) do
+    {:ok, image} = Image.new(250, 250, color: [255, 255, 255])
 
-    %Identicon.Image{image | grid: filtered_grid}
+    {:ok, image} =
+      Enum.reduce(pixel_map, {:ok, image}, fn {{x1, y1}, {x2, y2}}, {:ok, img} ->
+        Img.mutate(img, fn mut_img ->
+          Img.Draw.rect(mut_img, x1, y1, x2 - x1 + 1, y2 - y1 + 1, color: color)
+        end)
+      end)
+
+    image
   end
 
-  def build_grid(%Identicon.Image{hex: hex} = image) do
-    grid =
-      hex
-      |> Enum.chunk_every(3, 3, :discard)
-      |> Enum.flat_map(&mirror_row/1)
-      |> Enum.with_index()
-
-    %Identicon.Image{image | grid: grid}
+  def save_image(image, input) do
+    Image.write!(image, "#{input}.png")
   end
 
-  def mirror_row(row) do
+  defp mirror_row(row) do
     [first, second | _tail] = row
     row ++ [second, first]
-  end
-
-  def hash_input(input) do
-    hex =
-      :crypto.hash(:md5, input)
-      |> :binary.bin_to_list()
-
-    %Identicon.Image{hex: hex}
-  end
-
-  def pick_color(%Identicon.Image{hex: [r, g, b | _]} = image) do
-    %Identicon.Image{image | color: [r, g, b]}
   end
 end
